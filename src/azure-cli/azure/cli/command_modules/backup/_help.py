@@ -11,6 +11,29 @@ helps['backup'] = """
 type: group
 short-summary: Manage Azure Backups.
 """
+#identity
+# helps['backup identity'] = """
+# type: group
+# short-summary: Identity which access the keys to secure data
+# """
+# helps['backup identity assign'] = """
+# type: command
+# short-summary: Assigns an identity to a Recovery services vault.
+# examples:
+#   text: az backup identity assign --identity-id id --identity-type MyType --resource-group MyResourceGroup --vault-name MyVault
+# """
+# helps['backup identity list'] = """
+# type: command
+# short-summary: List identities of a Recovery services vault
+# examples:
+#   text: az backup identity list --identity-type MyType --resource-group MyResourceGroup --vault-name MyVault
+# """
+# helps['backup identity delete'] = """
+# type: command
+# short-summary: Deletes the identity of a Recovery services vault
+# examples:
+#   text: az backup identity delete --identity-id id --resource-group MyResourceGroup --vault-name MyVault
+# """
 
 helps['backup container'] = """
 type: group

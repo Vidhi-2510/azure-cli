@@ -181,6 +181,22 @@ def list_vaults(client, resource_group_name=None):
         return client.list_by_resource_group(resource_group_name)
     return client.list_by_subscription_id()
 
+#Functions for identity related commands
+def assign_identity(resource_group_name, vault_name, identity_type, identity_id):
+    print("Assigning Identity to the Vault")
+
+def list_identities(resource_group_name, vault_name, identity_type):
+    print("Listing all the identities of the Vault")
+
+def delete_identity(resource_group_name, vault_name, identity_id):
+    print("Deleting the identity for the Vault")
+
+#Functions for encryption related commands
+def encryption_update(resource_group_name, vault_name, encryption_key_source, encryption_key_vault,encryption_key_name, encryption_key_version, infrastructure_encryption):
+    print("Updating the encryption property of the Vault")
+
+def encryption_list(resource_group_name, vault_name):
+    print("Listing all the encryption keys of the Vault")
 
 def set_backup_properties(cmd, client, vault_name, resource_group_name, backup_storage_redundancy=None,
                           soft_delete_feature_state=None, cross_region_restore_flag=None):
@@ -580,7 +596,7 @@ def _should_use_original_storage_account(recovery_point, restore_to_staging_stor
 # pylint: disable=too-many-locals
 def restore_disks(cmd, client, resource_group_name, vault_name, container_name, item_name, rp_name, storage_account,
                   target_resource_group=None, restore_to_staging_storage_account=None, restore_only_osdisk=None,
-                  diskslist=None, restore_as_unmanaged_disks=None, use_secondary_region=None):
+                  diskslist=None, restore_as_unmanaged_disks=None, use_secondary_region=None, disk_encryption_set=None):
     item = show_item(cmd, backup_protected_items_cf(cmd.cli_ctx), resource_group_name, vault_name, container_name,
                      item_name, "AzureIaasVM", "VM", use_secondary_region)
     _validate_item(item)
