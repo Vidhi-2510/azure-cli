@@ -15,7 +15,8 @@ from knack.log import get_logger
 from msrest.paging import Paged
 from msrestazure.tools import parse_resource_id, is_valid_resource_id
 
-from azure.mgmt.recoveryservices.models import Vault, VaultProperties, Sku, SkuName
+from azure.mgmt.recoveryservices.models import Vault, VaultProperties, Sku, SkuName, PatchVault, IdentityData, \
+     CmkKeyVaultProperties, CmkKekIdentity, VaultPropertiesEncryption, UserIdentity
 from azure.mgmt.recoveryservicesbackup.models import ProtectedItemResource, AzureIaaSComputeVMProtectedItem, \
     AzureIaaSClassicComputeVMProtectedItem, ProtectionState, IaasVMBackupRequest, BackupRequestResource, \
     IaasVMRestoreRequest, RestoreRequestResource, BackupManagementType, WorkloadType, OperationStatusValues, \
@@ -183,21 +184,158 @@ def list_vaults(client, resource_group_name=None):
     return client.list_by_subscription_id()
 
 #Functions for identity related commands
-def assign_identity(resource_group_name, vault_name, identity_type, identity_id):
-    print("Assigning Identity to the Vault")
+def update_identity(client, resource_group_name, vault_name, identity_type, identity_id=None, identity_remove=None):
 
-def list_identities(resource_group_name, vault_name, identity_type):
-    print("Listing all the identities of the Vault")
+    vault_details =client.get(resource_group_name,vault_name)
+    
+    curr_identity_details = vault_details.identity
+    # print(curr_identity_details)
+    curr_identity_type = 'none'
 
-def delete_identity(resource_group_name, vault_name, identity_id):
-    print("Deleting the identity for the Vault")
+    if curr_identity_details != None:
+        curr_identity_type = curr_identity_details.type.lower()
+    
+
+    flag = 1
+    print(curr_identity_type)
+
+    identity_type = identity_type.replace(" ","")
+    identity_type = identity_type.lower()
+    print(identity_type)
+    if identity_type == "systemassigned" or identity_type == 'none':
+        if identity_id is not None:
+            raise CLIError(
+                """
+                The identity ids are only supported for 'UserAssigned' identity type.  
+                """) # error 1
+        if identity_remove:
+            flag = 0
+            # raise CLIError(
+            #     """
+            #     To remove all user_assigned_identities no need of identity_remove. 
+            #     Please try again with only identity_type.
+            #     identity_remove is used to remove one out of many user_assigned_identities.
+            #     """)
+        
+        
+    if curr_identity_type == 'none' or curr_identity_type == "systemassigned":
+        if identity_remove:
+            raise CLIError(
+                """
+                identity_remove can't be specified.
+                Currently no user assigned identity available for the Recovery Service Vault.
+                """)  # error 2
+
+        if identity_type =="userassigned" or identity_type =="systemassigned,userassigned":
+            if identity_id is None:
+                raise RequiredArgumentMissingError("Please provide identity id using --identity-id.") # error 3
+        
+    user_assigned_identity = None
+
+    if identity_id is not None:
+        userid = UserIdentity()
+        user_assigned_identity={identity_id: userid}
+ 
+    if identity_remove :
+        if flag == 1:
+            if identity_id is None:
+                raise RequiredArgumentMissingError("Please provide identity id to be removed using --identity-id.") # error 4
+            user_assigned_identity={identity_id: None}
+                
+    identity_data = IdentityData(type=identity_type, user_assigned_identities=user_assigned_identity)
+    vault = PatchVault(identity=identity_data)
+    client.begin_update(resource_group_name, vault_name, vault)
+    return 
 
 #Functions for encryption related commands
-def encryption_update(resource_group_name, vault_name, encryption_key_source, encryption_key_vault,encryption_key_name, encryption_key_version, infrastructure_encryption):
-    print("Updating the encryption property of the Vault")
+def encryption_update(client, resource_group_name, vault_name, encryption_key_id, infrastructure_encryption_setting=None, identity_id=None, use_systemassigned_identity=None):
+    keyVaultproperties = CmkKeyVaultProperties(key_uri = encryption_key_id)
 
-def encryption_list(resource_group_name, vault_name):
-    print("Listing all the encryption keys of the Vault")
+    vault_details =client.get(resource_group_name,vault_name)
+    encryption_details = vault_details.properties.encryption
+    
+    identity_details = vault_details.identity
+    identity_type = 'none'
+
+    if identity_details != None:
+        identity_type = identity_details.type.lower()
+    
+    print(identity_type)
+    
+    if identity_details is None or identity_type == 'none':
+        raise CLIError(
+            """
+            Specify identities using az backup vault update
+            """)
+
+
+
+    if encryption_details is None:
+        if identity_id is None and not(use_systemassigned_identity):
+            raise CLIError(
+                """
+                Specify either identity_id or set use_system_assigned True
+                """)
+        if infrastructure_encryption_setting is None:
+            infrastructure_encryption_setting = "Disabled"
+    else:
+        if infrastructure_encryption_setting is not None:
+            raise CLIError(
+                """
+                infrastructure_encryption can't be specified
+                """)
+    
+
+    
+    if identity_id is not None and use_systemassigned_identity:
+        raise CLIError(
+            """
+            Both identity_id and use_system_assigned can't be specified.
+            Please give Only one parameter and retry.
+            """)
+    
+    kekIdentity = None
+    flag = 1
+
+    # Error
+    if identity_id is not None:
+        if identity_type != "userassigned" and identity_type != "systemassigned, userassigned":
+            raise CLIError(
+            """
+            Specify user assigned identities using az backup vault update
+            """)
+        for element in identity_details.user_assigned_identities.keys():
+            if element == identity_id:
+                flag = 0
+    
+        if flag == 1:
+            raise CLIError(
+            """
+            User assigned identity not present in Identities of Recovery Service Vault.
+            """)
+
+    if use_systemassigned_identity:
+        if identity_type != "systemassigned" and identity_type != "systemassigned, userassigned":
+            raise CLIError(
+            """
+            Please make sure that system assigned identity is enabled for Recovery Service Vault
+            """)
+    
+
+
+    if identity_id != None or use_systemassigned_identity:
+        kekIdentity = CmkKekIdentity(user_assigned_identity = identity_id, use_system_assigned_identity=use_systemassigned_identity)
+    encryption_data = VaultPropertiesEncryption(key_vault_properties=keyVaultproperties, kek_identity=kekIdentity, infrastructure_encryption=infrastructure_encryption_setting)
+   
+    vault_properties = VaultProperties(encryption=encryption_data)
+    vault = PatchVault(properties=vault_properties)
+    client.begin_update(resource_group_name, vault_name, vault)
+
+
+def show_encryption(client, resource_group_name, vault_name):
+    vault_details =client.get(resource_group_name,vault_name)
+    encryption_details = vault_details.properties.encryption
+    return encryption_details
 
 def set_backup_properties(cmd, client, vault_name, resource_group_name, backup_storage_redundancy=None,
                           soft_delete_feature_state=None, cross_region_restore_flag=None):
@@ -654,6 +792,15 @@ def restore_disks(cmd, client, resource_group_name, vault_name, container_name, 
     if diskslist:
         restore_disk_lun_list = diskslist
 
+    if disk_encryption_set is not None:
+        print('Accepted disk encryption set')
+        if not(vault.properties.encryption != None and recovery_point.properties.is_managed_virtual_machine and not(recovery_point.properties.is_source_vm_encrypted) and use_secondary_region == None):
+            raise CLIError(
+            """
+            disk_encryption_set can't be specified
+            """)
+
+
     trigger_restore_properties = IaasVMRestoreRequest(create_new_cloud_service=True,
                                                       recovery_point_id=rp_name,
                                                       recovery_type='RestoreDisks',
@@ -662,7 +809,8 @@ def restore_disks(cmd, client, resource_group_name, vault_name, container_name, 
                                                       source_resource_id=_source_resource_id,
                                                       target_resource_group_id=target_rg_id,
                                                       original_storage_account_option=use_original_storage_account,
-                                                      restore_disk_lun_list=restore_disk_lun_list)
+                                                      restore_disk_lun_list=restore_disk_lun_list,
+                                                      disk_encryption_set_id=disk_encryption_set)
     trigger_restore_request = RestoreRequestResource(properties=trigger_restore_properties)
 
     if use_secondary_region:

@@ -34,17 +34,12 @@ def load_command_table(self, _):
         g.custom_command('backup-properties show', 'get_backup_properties', client_factory=backup_storage_configs_cf)
         g.custom_command('backup-properties set', 'set_backup_properties', client_factory=backup_storage_configs_cf)
         g.custom_command('delete', 'delete_vault', confirmation=True)
-
-    #Commands for identity
-    with self.command_group('backup identity', backup_custom) as g:
-        g.command('assign', 'assign_identity')
-        g.command('list', 'list_identities')
-        g.command('delete', 'delete_identity')
-
+        g.custom_command('update', 'update_identity')  #Command for identity
+    
     #Commands for encryption
-    with self.command_group('backup encryption', backup_custom) as g:
+    with self.command_group('backup encryption', backup_custom, client_factory=vaults_cf) as g:
         g.command('update', 'encryption_update')
-        g.command('list', 'encryption_list')
+        g.command('show', 'show_encryption')
 
 
     with self.command_group('backup container', backup_custom_base, client_factory=protection_containers_cf) as g:
