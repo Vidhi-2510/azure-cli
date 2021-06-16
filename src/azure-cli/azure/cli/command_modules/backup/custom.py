@@ -189,14 +189,11 @@ def update_identity(client, resource_group_name, vault_name, identity_type, iden
     vault_details =client.get(resource_group_name,vault_name)
     
     curr_identity_details = vault_details.identity
-    # print(curr_identity_details)
     curr_identity_type = 'none'
 
     if curr_identity_details != None:
         curr_identity_type = curr_identity_details.type.lower()
     
-
-    flag = 1
     print(curr_identity_type)
 
     identity_type = identity_type.replace(" ","")
@@ -206,29 +203,26 @@ def update_identity(client, resource_group_name, vault_name, identity_type, iden
         if identity_id is not None:
             raise CLIError(
                 """
-                The identity ids are only supported for 'UserAssigned' identity type.  
+                --identiy-id paramter is only supported for UserAssigned identities.  
                 """) # error 1
         if identity_remove:
-            flag = 0
-            # raise CLIError(
-            #     """
-            #     To remove all user_assigned_identities no need of identity_remove. 
-            #     Please try again with only identity_type.
-            #     identity_remove is used to remove one out of many user_assigned_identities.
-            #     """)
+            raise CLIError(
+                """
+                Invalid parameter --identity-remove.
+                --identity-remove is to remove only particular user assigned --identity-id.
+                """)
         
         
     if curr_identity_type == 'none' or curr_identity_type == "systemassigned":
         if identity_remove:
             raise CLIError(
                 """
-                identity_remove can't be specified.
-                Currently no user assigned identity available for the Recovery Service Vault.
+                --identiy-remove parameter is only needed to remove UserAssigned identities.
                 """)  # error 2
 
         if identity_type =="userassigned" or identity_type =="systemassigned,userassigned":
             if identity_id is None:
-                raise RequiredArgumentMissingError("Please provide identity id using --identity-id.") # error 3
+                raise RequiredArgumentMissingError("Please provide identity id using --identity-id parameter.") # error 3
         
     user_assigned_identity = None
 
@@ -237,10 +231,9 @@ def update_identity(client, resource_group_name, vault_name, identity_type, iden
         user_assigned_identity={identity_id: userid}
  
     if identity_remove :
-        if flag == 1:
-            if identity_id is None:
-                raise RequiredArgumentMissingError("Please provide identity id to be removed using --identity-id.") # error 4
-            user_assigned_identity={identity_id: None}
+        if identity_id is None:
+            raise RequiredArgumentMissingError("Please provide identity id to be removed using --identity-id parameter.") # error 4
+        user_assigned_identity={identity_id: None}
                 
     identity_data = IdentityData(type=identity_type, user_assigned_identities=user_assigned_identity)
     vault = PatchVault(identity=identity_data)
@@ -265,16 +258,14 @@ def encryption_update(client, resource_group_name, vault_name, encryption_key_id
     if identity_details is None or identity_type == 'none':
         raise CLIError(
             """
-            Specify identities using az backup vault update
+            Please enable identities of Recovery Service Vault
             """)
-
-
 
     if encryption_details is None:
         if identity_id is None and not(use_systemassigned_identity):
             raise CLIError(
                 """
-                Specify either identity_id or set use_system_assigned True
+                Please provide user assigned identity id using --identity-id paramter or --use-system-assigned as True
                 """)
         if infrastructure_encryption_setting is None:
             infrastructure_encryption_setting = "Disabled"
@@ -284,25 +275,22 @@ def encryption_update(client, resource_group_name, vault_name, encryption_key_id
                 """
                 infrastructure_encryption can't be specified
                 """)
-    
-
-    
+     
     if identity_id is not None and use_systemassigned_identity:
         raise CLIError(
             """
-            Both identity_id and use_system_assigned can't be specified.
-            Please give Only one parameter and retry.
+            Both --identity-id and --use-system-assigned parameters can't be given at the same time.
             """)
     
     kekIdentity = None
     flag = 1
 
-    # Error
+    
     if identity_id is not None:
         if identity_type != "userassigned" and identity_type != "systemassigned, userassigned":
             raise CLIError(
             """
-            Specify user assigned identities using az backup vault update
+            Please specify user assigned identity for Recovery Service Vault.
             """)
         for element in identity_details.user_assigned_identities.keys():
             if element == identity_id:
@@ -311,7 +299,7 @@ def encryption_update(client, resource_group_name, vault_name, encryption_key_id
         if flag == 1:
             raise CLIError(
             """
-            User assigned identity not present in Identities of Recovery Service Vault.
+            This user assigned identity not available for Recovery Service Vault.
             """)
 
     if use_systemassigned_identity:
