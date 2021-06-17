@@ -184,7 +184,7 @@ def list_vaults(client, resource_group_name=None):
     return client.list_by_subscription_id()
 
 #Functions for identity related commands
-def update_identity(client, resource_group_name, vault_name, identity_type, identity_id=None, identity_remove=None):
+def update_identity(client, resource_group_name, vault_name, identity_type=None, identity_id=None, remove_user_assigned=None, remove_system_assigned=None):
 
     vault_details =client.get(resource_group_name,vault_name)
     
@@ -195,50 +195,109 @@ def update_identity(client, resource_group_name, vault_name, identity_type, iden
         curr_identity_type = curr_identity_details.type.lower()
     
     print(curr_identity_type)
-
-    identity_type = identity_type.replace(" ","")
-    identity_type = identity_type.lower()
-    print(identity_type)
-    if identity_type == "systemassigned" or identity_type == 'none':
-        if identity_id is not None:
-            raise CLIError(
-                """
-                --identiy-id paramter is only supported for UserAssigned identities.  
-                """) # error 1
-        if identity_remove:
-            raise CLIError(
-                """
-                Invalid parameter --identity-remove.
-                --identity-remove is to remove only particular user assigned --identity-id.
-                """)
-        
-        
-    if curr_identity_type == 'none' or curr_identity_type == "systemassigned":
-        if identity_remove:
-            raise CLIError(
-                """
-                --identiy-remove parameter is only needed to remove UserAssigned identities.
-                """)  # error 2
-
-        if identity_type =="userassigned" or identity_type =="systemassigned,userassigned":
-            if identity_id is None:
-                raise RequiredArgumentMissingError("Please provide identity id using --identity-id parameter.") # error 3
-        
     user_assigned_identity = None
 
-    if identity_id is not None:
-        userid = UserIdentity()
-        user_assigned_identity={identity_id: userid}
- 
-    if identity_remove :
-        if identity_id is None:
-            raise RequiredArgumentMissingError("Please provide identity id to be removed using --identity-id parameter.") # error 4
-        user_assigned_identity={identity_id: None}
-                
+    if identity_type != None:
+        if remove_user_assigned or remove_system_assigned:
+            raise CLIError(
+                """
+                Addition and Deletion of identities not possible at the same time.
+                """)
+
+        identity_type = identity_type.replace(" ","")
+        identity_type = identity_type.lower()
+
+        if identity_type == 'none' or identity_type == 'systemassigned':
+            if identity_id is not None:
+                raise CLIError(
+                    """
+                    --identiy-id paramter is only supported for UserAssigned identities.  
+                    """)
+            if (curr_identity_type == 'systemassigned, userassigned' or curr_identity_type == 'userassigned') and identity_type == 'systemassigned':
+                identity_type = 'systemassigned,userassigned'
+        
+        elif identity_type == 'userassigned':
+            if identity_id is None:
+                raise RequiredArgumentMissingError("Please provide identity id using --identity-id parameter.")
+
+            userid = UserIdentity()
+            user_assigned_identity = dict()
+            for element in identity_id:
+                user_assigned_identity[element]=userid
+            
+            if curr_identity_type == 'systemassigned' or curr_identity_type == 'systemassigned, userassigned':
+                identity_type = 'systemassigned,userassigned'
+
+        else:
+            raise CLIError(
+                """
+                Invalid Identity type  
+                """)
+    
+    elif remove_system_assigned or remove_user_assigned:
+        if remove_user_assigned and remove_system_assigned:
+            raise CLIError(
+                """
+                Both system assigned and user assigned identities can't be removed at the same time.
+                """)
+
+        if remove_system_assigned:
+            if identity_id is not None:
+                raise CLIError(
+                    """
+                    --identiy-id paramter is only supported for UserAssigned identities.  
+                    """)
+            if curr_identity_type != 'systemassigned' and curr_identity_type !='systemassigned, userassigned':
+                raise CLIError(
+                    """
+                    System assigned identity is not enabled for Recovery Service Vault.
+                    """)
+            if curr_identity_type == 'systemassigned':
+                identity_type = 'none'
+            else:
+                identity_type = 'userassigned'
+        else:
+            if curr_identity_type != 'userassigned' and curr_identity_type !='systemassigned, userassigned':
+                raise CLIError(
+                """
+                There are no user assigned identities to be removed.
+                """)
+            
+            if identity_id is None:
+                raise RequiredArgumentMissingError("Please provide identity id to be removed using --identity-id parameter.")
+
+            userid = None
+            count = 0
+            length = 0
+            user_assigned_identity = dict()
+            for element in curr_identity_details.user_assigned_identities.keys():
+                if element in identity_id:
+                    user_assigned_identity[element] = userid
+                    count+=1
+                length+=1
+
+            if curr_identity_type == 'systemassigned, userassigned':
+                if count == length:
+                    identity_type = 'systemassigned'
+                    user_assigned_identity = None
+                else:
+                    identity_type = 'systemassigned,userassigned'
+            else:
+                if  count == length:
+                    identity_type ='none'
+                    user_assigned_identity = None
+                else:
+                    identity_type = 'userassigned'
+    
+    else:
+        raise CLIError(
+            """
+            Please provide either --identity-type
+            """)
+
     identity_data = IdentityData(type=identity_type, user_assigned_identities=user_assigned_identity)
     vault = PatchVault(identity=identity_data)
     client.begin_update(resource_group_name, vault_name, vault)
-    return 
 
 #Functions for encryption related commands
 def encryption_update(client, resource_group_name, vault_name, encryption_key_id, infrastructure_encryption_setting=None, identity_id=None, use_systemassigned_identity=None):

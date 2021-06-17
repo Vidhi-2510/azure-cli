@@ -63,8 +63,8 @@ target_container_name_type = CLIArgumentType(options_list=['--target-container-n
 filepath_type = CLIArgumentType(options_list=['--filepath'], help="The path to which the DB should be restored as files.")
 from_full_rp_type = CLIArgumentType(options_list=['--from-full-rp-name'], help="Name of the starting Recovery point.")
 identity_type = CLIArgumentType(options_list=['--identity-type'], help="The identity type to be enabled for this vault, whether it is system-assigned or user-assigned")
-identity_id_type = CLIArgumentType(options_list=['--identity-id'], help="This will be applicable only after we onboard to user-assigned MSI")
-identity_remove_type = CLIArgumentType(options_list=['--identity-remove'], help="This is applicable for removing only particular user-assigned MSI")
+identity_id_type = CLIArgumentType(nargs='+', options_list=['--identity-id'], help="This will be applicable only after we onboard to user-assigned MSI")
+# identity_remove_type = CLIArgumentType(options_list=['--identity-remove'], help="This is applicable for removing only particular user-assigned MSI")
 encryption_key_id_type = CLIArgumentType(options_list=['--encryption-key-id'], help="The encryption key id you want to use for encryption")
 use_system_assigned_identity_type = CLIArgumentType(options_list=['--use-system-assigned'], help="The system assigned identity type used for the encryption")
 infrastructure_encryption_type = CLIArgumentType(options_list=['--infrastructure-encryption'], help="Enable or disable infrastructure encryption on this vault. Infrastructure encryption must be enabled when configuring encryption of the vault for the first time. Once enabled, infrastructure encryption cannot be disabled.")
@@ -95,7 +95,9 @@ def load_arguments(self, _):
         c.argument('vault_name', vault_name_type)
         c.argument('identity_type', identity_type)
         c.argument('identity_id', identity_id_type)
-        c.argument('identity_remove', identity_remove_type)
+        # c.argument('identity_remove', identity_remove_type)
+        c.argument('remove_user_assigned', action='store_true',help="Use this flag to remove user-assigned MSI")
+        c.argument('remove_system_assigned', action='store_true', help="Use this flag to remove system assigned identity")
 
     #Encryption
     with self.argument_context('backup encryption') as c:
